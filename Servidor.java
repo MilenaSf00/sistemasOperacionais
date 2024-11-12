@@ -1,10 +1,10 @@
+import database.DatabaseVector;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.*;
-import java.util.concurrent.ExecutorService;  // Importação do ExecutorService
-import java.util.concurrent.Executors;        // Importação do Executors
-import database.DatabaseVector;
 
 public class Servidor {
     
@@ -13,10 +13,10 @@ public class Servidor {
     private static boolean useLock = false;
     private static DatabaseVector databaseVector = new DatabaseVector();
     private static final ReentrantLock lock = new ReentrantLock();
-    private static boolean serverRunning = true;  // Variável para controlar o servidor
+    private static boolean serverRunning = true;
+    private static int soma = 0;
 
     public static void main(String[] args) {
-        // Processando parâmetros de execução
         for (String arg : args) {
             if (arg.equals("verbose")) {
                 verbose = true;
@@ -25,34 +25,30 @@ public class Servidor {
             }
         }
 
-        // Inicializando o vetor com tamanho fixo
-        initializeDatabase(0);  
-
-        ExecutorService executor = Executors.newCachedThreadPool();  // Para gerenciar múltiplos clientes
+        initializeDatabase(0);
+        ExecutorService executor = Executors.newCachedThreadPool();
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             log("Servidor iniciado na porta " + PORT);
             log("Servidor aguardando conexões...");
 
-            // Espera por novas conexões de clientes
             while (serverRunning) {
                 Socket clientSocket = serverSocket.accept();
                 log("Cliente conectado: " + clientSocket.getInetAddress());
 
-                // Usando threads para atender múltiplos clientes simultaneamente
-                executor.submit(new ClientHandler(clientSocket)); // Envia o socket do cliente para o manipulador
+                executor.submit(new ClientHandler(clientSocket));
             }
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            executor.shutdown();  // Aguarda a conclusão de todas as operações dos clientes
+            executor.shutdown();
             log("Somatório do banco de dados: " + sumDatabase());
         }
     }
 
     private static void initializeDatabase(int size) {
-        int defaultSize = 40;  // Tamanho fixo do vetor
-        databaseVector.setSize(defaultSize); // Define o tamanho do vetor
-        Arrays.fill(databaseVector.getVector(), 0); // Preenche com zeros
+        int defaultSize = 40;
+        databaseVector.setSize(defaultSize);
+        Arrays.fill(databaseVector.getVector(), 0);
     }
 
     private static int sumDatabase() {
@@ -98,14 +94,15 @@ public class Servidor {
                         } else {
                             out.println("Comando inválido. Use: READ <índice>");
                         }
-                    } else if (inputLine.equals("SHUTDOWN")) {  // Fechando o servidor quando o comando for recebido
+                    } else if (inputLine.equals("SHUTDOWN")) {
                         out.println("Servidor encerrado. Somatório final: " + sumDatabase());
-                        serverRunning = false;  // Interrompe o loop de espera de conexões
-                        break;  // Sai do loop de leitura de mensagens
+                        serverRunning = false;
+                        break;
                     } else {
                         out.println("Comando desconhecido.");
                     }
                 }
+                log("Somatório dos valores: " + soma);
             } catch (IOException e) {
                 e.printStackTrace();
             } finally {
@@ -119,16 +116,18 @@ public class Servidor {
 
         private void writeDatabase(int index) {
             if (useLock) {
-                lock.lock(); // Locking for concurrency control
+                lock.lock();
                 try {
-                    databaseVector.write(index, 1); // Chama a função write sem o useLock
+                    databaseVector.write(index, index + 1);
+                    soma +=index;
                 } finally {
                     lock.unlock();
                 }
             } else {
-                databaseVector.write(index, 1); // Chama a função write sem lock
+                soma +=index;
+                databaseVector.write(index, index + 1);
             }
-        }
+        }        
 
         private int readDatabase(int index) {
             return databaseVector.read(index);
