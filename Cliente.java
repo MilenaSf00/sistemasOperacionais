@@ -11,6 +11,11 @@ public class Cliente {
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in))) {
 
+            // Recebe a solicitação de tamanho do 'database' do servidor
+            System.out.println(in.readLine());
+            String sizeInput = stdIn.readLine();
+            out.println(sizeInput); // Envia o tamanho de volta para o servidor
+
             System.out.println("Conectado ao servidor. Digite comandos (e.g., update 1 10, sum):");
 
             String userInput;

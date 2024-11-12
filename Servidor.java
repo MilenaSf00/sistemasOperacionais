@@ -1,60 +1,65 @@
 import database.DatabaseVector;
 import java.io.*;
 import java.net.*;
-import java.util.Scanner;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Servidor {
     private static final int PORT = 12345;
-    private static boolean verbose = false; // (a) Parâmetro de execução para mensagens do servidor
-    private static boolean useLock = false; // (b) Parâmetro de execução para controle de concorrência
+    private static boolean verbose = false;
+    private static boolean useLock = false;
     private static DatabaseVector databaseVector = new DatabaseVector();
-    private static final ReentrantLock lock = new ReentrantLock(); // Controle de concorrência
+    private static final ReentrantLock lock = new ReentrantLock();
 
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
-
-        // Solicita ao usuário o tamanho do vetor
-        System.out.print("Tamanho do 'database': ");
-        int size = scanner.nextInt();
-        scanner.close();
-
-        // (a) Parâmetro de execução para habilitar mensagens do servidor
         for (String arg : args) {
             if (arg.equals("verbose")) {
                 verbose = true;
             } else if (arg.equals("lock")) {
-                useLock = true; // (b) Controle de concorrência habilitado com parâmetro de execução
+                useLock = true;
             }
         }
 
-        // (e) Inicializar o vetor/array do banco de dados com 0 (zero) em todas as posições
-        initializeDatabase(size);
-
-        System.out.println("Vetor 'database' inicializado com tamanho " + size);
-
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             log("Servidor iniciado na porta " + PORT);
+
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 log("Cliente conectado: " + clientSocket.getInetAddress());
-                
-                // (c) Implementação de processo leve (threads)
+
+                // Solicita o tamanho do vetor ao cliente antes de iniciar o processamento
+                int databaseSize = getDatabaseSizeFromClient(clientSocket);
+                initializeDatabase(databaseSize);
+                System.out.println("Vetor 'database' inicializado com tamanho " + databaseSize);
+
                 new Thread(new ClientHandler(clientSocket)).start();
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        // (f) Imprimir no final da execução do servidor o somatório de todas as posições do vetor
         log("Somatório do banco de dados: " + sumDatabase());
+    }
+
+    private static int getDatabaseSizeFromClient(Socket clientSocket) throws IOException {
+        PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+        BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+
+        out.println("Digite o tamanho do 'database':"); // Envia solicitação ao cliente
+        String sizeInput = in.readLine(); // Lê resposta do cliente
+
+        try {
+            return Integer.parseInt(sizeInput); // Converte a resposta em inteiro
+        } catch (NumberFormatException e) {
+            log("Entrada inválida para o tamanho do 'database'. Usando tamanho padrão de 10.");
+            return 10;
+        }
     }
 
     private static void initializeDatabase(int size) {
         databaseVector.setSize(size);
         int[] vector = databaseVector.getVector();
         for (int i = 0; i < vector.length; i++) {
-            vector[i] = 0; // (e) Inicialização do vetor com 0
+            vector[i] = 0;
         }
     }
 
@@ -63,11 +68,11 @@ public class Servidor {
         for (int value : databaseVector.getVector()) {
             sum += value;
         }
-        return sum; // (f) Somatório do banco de dados
+        return sum;
     }
 
     private static void log(String message) {
-        if (verbose) { // (a) Controle para exibir mensagens do servidor
+        if (verbose) {
             System.out.println(message);
         }
     }
@@ -121,7 +126,7 @@ public class Servidor {
                 return;
             }
 
-            if (useLock) { // (b) Controle de concorrência com ReentrantLock
+            if (useLock) {
                 lock.lock();
                 try {
                     vector[index] += value;
@@ -129,7 +134,7 @@ public class Servidor {
                     lock.unlock();
                 }
             } else {
-                synchronized (vector) { // (b) Controle de concorrência com synchronized
+                synchronized (vector) {
                     vector[index] += value;
                 }
             }
