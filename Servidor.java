@@ -1,28 +1,37 @@
+import database.DatabaseVector;
 import java.io.*;
 import java.net.*;
+import java.util.Scanner;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Servidor {
     private static final int PORT = 12345;
     private static boolean verbose = false; // (a) Parâmetro de execução para mensagens do servidor
     private static boolean useLock = false; // (b) Parâmetro de execução para controle de concorrência
-    private static final int[] database = new int[100]; // (d) Banco de dados simplificado
+    private static DatabaseVector databaseVector = new DatabaseVector();
     private static final ReentrantLock lock = new ReentrantLock(); // Controle de concorrência
 
     public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+
+        // Solicita ao usuário o tamanho do vetor
+        System.out.print("Tamanho do 'database': ");
+        int size = scanner.nextInt();
+        scanner.close();
+
         // (a) Parâmetro de execução para habilitar mensagens do servidor
-        if (args.length > 0) {
-            for (String arg : args) {
-                if (arg.equals("verbose")) {
-                    verbose = true;
-                } else if (arg.equals("lock")) {
-                    useLock = true; // (b) Controle de concorrência habilitado com parâmetro de execução
-                }
+        for (String arg : args) {
+            if (arg.equals("verbose")) {
+                verbose = true;
+            } else if (arg.equals("lock")) {
+                useLock = true; // (b) Controle de concorrência habilitado com parâmetro de execução
             }
         }
 
         // (e) Inicializar o vetor/array do banco de dados com 0 (zero) em todas as posições
-        initializeDatabase();
+        initializeDatabase(size);
+
+        System.out.println("Vetor 'database' inicializado com tamanho " + size);
 
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             log("Servidor iniciado na porta " + PORT);
@@ -41,15 +50,17 @@ public class Servidor {
         log("Somatório do banco de dados: " + sumDatabase());
     }
 
-    private static void initializeDatabase() {
-        for (int i = 0; i < database.length; i++) {
-            database[i] = 0; // (e) Inicialização do vetor com 0
+    private static void initializeDatabase(int size) {
+        databaseVector.setSize(size);
+        int[] vector = databaseVector.getVector();
+        for (int i = 0; i < vector.length; i++) {
+            vector[i] = 0; // (e) Inicialização do vetor com 0
         }
     }
 
     private static int sumDatabase() {
         int sum = 0;
-        for (int value : database) {
+        for (int value : databaseVector.getVector()) {
             sum += value;
         }
         return sum; // (f) Somatório do banco de dados
@@ -75,7 +86,7 @@ public class Servidor {
 
                 String inputLine;
                 while ((inputLine = in.readLine()) != null) {
-                    log("Mensagem recebida: " + inputLine);   //soma o valor inserido ao valor que ja ta na posição 
+                    log("Mensagem recebida: " + inputLine);
                     if (inputLine.startsWith("update")) {
                         String[] parts = inputLine.split(" ");
                         if (parts.length == 3) {
@@ -104,7 +115,8 @@ public class Servidor {
         }
 
         private void updateDatabase(int index, int value) {
-            if (index < 0 || index >= database.length) {
+            int[] vector = databaseVector.getVector();
+            if (index < 0 || index >= vector.length) {
                 log("Índice fora do limite: " + index);
                 return;
             }
@@ -112,13 +124,13 @@ public class Servidor {
             if (useLock) { // (b) Controle de concorrência com ReentrantLock
                 lock.lock();
                 try {
-                    database[index] += value;
+                    vector[index] += value;
                 } finally {
                     lock.unlock();
                 }
             } else {
-                synchronized (database) { // (b) Controle de concorrência com synchronized
-                    database[index] += value;
+                synchronized (vector) { // (b) Controle de concorrência com synchronized
+                    vector[index] += value;
                 }
             }
         }
