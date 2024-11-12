@@ -1,73 +1,66 @@
-import database.DatabaseVector;
 import java.io.*;
 import java.net.*;
-import java.util.Scanner;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.*;
+import java.util.concurrent.locks.*;
+import java.util.concurrent.ExecutorService;  // Importação do ExecutorService
+import java.util.concurrent.Executors;        // Importação do Executors
+import database.DatabaseVector;
 
 public class Servidor {
+    
     private static final int PORT = 12345;
-    private static boolean verbose = false; // (a) Parâmetro de execução para mensagens do servidor
-    private static boolean useLock = false; // (b) Parâmetro de execução para controle de concorrência
+    private static boolean verbose = true;
+    private static boolean useLock = false;
     private static DatabaseVector databaseVector = new DatabaseVector();
-    private static final ReentrantLock lock = new ReentrantLock(); // Controle de concorrência
+    private static final ReentrantLock lock = new ReentrantLock();
+    private static boolean serverRunning = true;  // Variável para controlar o servidor
 
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
-
-        // Solicita ao usuário o tamanho do vetor
-        System.out.print("Tamanho do 'database': ");
-        int size = scanner.nextInt();
-        scanner.close();
-
-        // (a) Parâmetro de execução para habilitar mensagens do servidor
+        // Processando parâmetros de execução
         for (String arg : args) {
             if (arg.equals("verbose")) {
                 verbose = true;
             } else if (arg.equals("lock")) {
-                useLock = true; // (b) Controle de concorrência habilitado com parâmetro de execução
+                useLock = true;
             }
         }
 
-        // (e) Inicializar o vetor/array do banco de dados com 0 (zero) em todas as posições
-        initializeDatabase(size);
+        // Inicializando o vetor com tamanho fixo
+        initializeDatabase(0);  
 
-        System.out.println("Vetor 'database' inicializado com tamanho " + size);
-
+        ExecutorService executor = Executors.newCachedThreadPool();  // Para gerenciar múltiplos clientes
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             log("Servidor iniciado na porta " + PORT);
-            while (true) {
+            log("Servidor aguardando conexões...");
+
+            // Espera por novas conexões de clientes
+            while (serverRunning) {
                 Socket clientSocket = serverSocket.accept();
                 log("Cliente conectado: " + clientSocket.getInetAddress());
-                
-                // (c) Implementação de processo leve (threads)
-                new Thread(new ClientHandler(clientSocket)).start();
+
+                // Usando threads para atender múltiplos clientes simultaneamente
+                executor.submit(new ClientHandler(clientSocket)); // Envia o socket do cliente para o manipulador
             }
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            executor.shutdown();  // Aguarda a conclusão de todas as operações dos clientes
+            log("Somatório do banco de dados: " + sumDatabase());
         }
-
-        // (f) Imprimir no final da execução do servidor o somatório de todas as posições do vetor
-        log("Somatório do banco de dados: " + sumDatabase());
     }
 
     private static void initializeDatabase(int size) {
-        databaseVector.setSize(size);
-        int[] vector = databaseVector.getVector();
-        for (int i = 0; i < vector.length; i++) {
-            vector[i] = 0; // (e) Inicialização do vetor com 0
-        }
+        int defaultSize = 40;  // Tamanho fixo do vetor
+        databaseVector.setSize(defaultSize); // Define o tamanho do vetor
+        Arrays.fill(databaseVector.getVector(), 0); // Preenche com zeros
     }
 
     private static int sumDatabase() {
-        int sum = 0;
-        for (int value : databaseVector.getVector()) {
-            sum += value;
-        }
-        return sum; // (f) Somatório do banco de dados
+        return Arrays.stream(databaseVector.getVector()).sum();
     }
 
     private static void log(String message) {
-        if (verbose) { // (a) Controle para exibir mensagens do servidor
+        if (verbose) {
             System.out.println(message);
         }
     }
@@ -87,18 +80,28 @@ public class Servidor {
                 String inputLine;
                 while ((inputLine = in.readLine()) != null) {
                     log("Mensagem recebida: " + inputLine);
-                    if (inputLine.startsWith("update")) {
+                    if (inputLine.startsWith("WRITE")) {
                         String[] parts = inputLine.split(" ");
                         if (parts.length == 3) {
                             int index = Integer.parseInt(parts[1]);
-                            int value = Integer.parseInt(parts[2]);
-                            updateDatabase(index, value);
-                            out.println("Atualização realizada no índice " + index);
+                            writeDatabase(index);
+                            out.println("Escrita realizada no índice " + index);
                         } else {
-                            out.println("Comando inválido. Use: update <índice> <valor>");
+                            out.println("Comando inválido. Use: WRITE <índice>");
                         }
-                    } else if (inputLine.equals("sum")) {
-                        out.println("Somatório atual: " + sumDatabase());
+                    } else if (inputLine.startsWith("READ")) {
+                        String[] parts = inputLine.split(" ");
+                        if (parts.length == 2) {
+                            int index = Integer.parseInt(parts[1]);
+                            int value = readDatabase(index);
+                            out.println("Valor no índice " + index + ": " + value);
+                        } else {
+                            out.println("Comando inválido. Use: READ <índice>");
+                        }
+                    } else if (inputLine.equals("SHUTDOWN")) {  // Fechando o servidor quando o comando for recebido
+                        out.println("Servidor encerrado. Somatório final: " + sumDatabase());
+                        serverRunning = false;  // Interrompe o loop de espera de conexões
+                        break;  // Sai do loop de leitura de mensagens
                     } else {
                         out.println("Comando desconhecido.");
                     }
@@ -114,25 +117,21 @@ public class Servidor {
             }
         }
 
-        private void updateDatabase(int index, int value) {
-            int[] vector = databaseVector.getVector();
-            if (index < 0 || index >= vector.length) {
-                log("Índice fora do limite: " + index);
-                return;
-            }
-
-            if (useLock) { // (b) Controle de concorrência com ReentrantLock
-                lock.lock();
+        private void writeDatabase(int index) {
+            if (useLock) {
+                lock.lock(); // Locking for concurrency control
                 try {
-                    vector[index] += value;
+                    databaseVector.write(index, 1); // Chama a função write sem o useLock
                 } finally {
                     lock.unlock();
                 }
             } else {
-                synchronized (vector) { // (b) Controle de concorrência com synchronized
-                    vector[index] += value;
-                }
+                databaseVector.write(index, 1); // Chama a função write sem lock
             }
+        }
+
+        private int readDatabase(int index) {
+            return databaseVector.read(index);
         }
     }
 }

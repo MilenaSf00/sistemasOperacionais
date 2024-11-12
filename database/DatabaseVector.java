@@ -3,19 +3,32 @@ package database;
 public class DatabaseVector {
     private int[] vector;
 
-    public DatabaseVector() {
-        this.vector = new int[0]; // Inicializa um vetor vazio
-    }
-
+    // Método para definir o tamanho do vetor
     public void setSize(int size) {
-        this.vector = new int[size]; // Redimensiona o vetor
+        vector = new int[size];
     }
 
-    public int getSize() {
-        return vector.length;
-    }
-
+    // Método para obter o vetor
     public int[] getVector() {
         return vector;
+    }
+
+    // Método para escrever um valor no índice especificado
+    public void write(int index, int value) {
+        if (index >= 0 && index < vector.length) {
+            vector[index] = value;
+        } else {
+            System.out.println("Índice fora dos limites.");
+        }
+    }
+
+    // Método para ler um valor de um índice
+    public int read(int index) {
+        if (index >= 0 && index < vector.length) {
+            return vector[index];
+        } else {
+            System.out.println("Índice fora dos limites.");
+            return -1; // Ou outro valor padrão
+        }
     }
 }
