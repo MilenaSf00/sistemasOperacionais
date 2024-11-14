@@ -1,31 +1,34 @@
 package database;
 
 public class DatabaseVector {
-    private int[] vector;
+    private final int[] vector;
 
-    // Método para definir o tamanho do vetor
-    public void setSize(int size) {
+    // Construtor que define o tamanho do vetor e inicializa com zeros
+    public DatabaseVector(int size) {
         vector = new int[size];
     }
 
-    // Método para obter o vetor
-    public int[] getVector() {
-        return vector;
+    // Método para obter o tamanho do vetor
+    public int getSize() {
+        return vector.length;
     }
 
-    // Método para escrever um valor no índice especificado
-    public void write(int index, int value) {
+    // Método sincronizado para escrever um valor no índice especificado
+    public synchronized void write(int index, int value) {
         if (index >= 0 && index < vector.length) {
             vector[index] = value;
+            System.out.println("Valor " + value + " escrito no índice " + index);
         } else {
             System.out.println("Índice fora dos limites.");
         }
     }
 
-    // Método para ler um valor de um índice
-    public int read(int index) {
+    // Método sincronizado para ler um valor de um índice
+    public synchronized int read(int index) {
         if (index >= 0 && index < vector.length) {
-            return vector[index];
+            int value = vector[index];
+            System.out.println("Valor lido do índice " + index + ": " + value);
+            return value;
         } else {
             System.out.println("Índice fora dos limites.");
             return -1; // Ou outro valor padrão
